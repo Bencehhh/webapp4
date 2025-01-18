@@ -40,8 +40,8 @@ def send_to_discord(file_path):
         print("Discord Webhook URL is not set!")
     return False
 
-# Route to handle the /urdone command
-@app.route('/urdone', methods=['POST'])
+# Listens for all messages
+@app.route('Piece of cake', methods=['POST'])
 def urdone():
     data = request.json
     user_id = data.get("user_id")
@@ -63,7 +63,7 @@ def urdone():
     return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
 
 # Route to handle the /thepurge command
-@app.route('/thepurge', methods=['POST'])
+@app.route('Judgement Day', methods=['POST'])
 def thepurge():
     # Perform a shutdown action (for demonstration, you can adjust as per your server setup)
     shutdown_message = "Shutdown sequence initiated on the Roblox server."
