@@ -4,6 +4,9 @@ from flask import Flask, request, jsonify
 import requests
 from dotenv import load_dotenv
 from flask_cors import CORS
+import time
+import threading
+import signal
 
 # Load the environment variables from .env file
 load_dotenv()
@@ -25,25 +28,23 @@ if not DISCORD_WEBHOOK:
     raise ValueError("Discord Webhook URL is not set in the environment variables.")
 
 # Send a message to Discord via webhook
-def send_to_discord(file_path):
+def send_to_discord(file_path=None, message=None):
     if DISCORD_WEBHOOK:
         try:
-            # Prepare the payload with the file attachment
-            with open(file_path, 'rb') as f:
-                files = {'file': (file_path, f, 'text/csv')}
-                response = requests.post(DISCORD_WEBHOOK, files=files)
+            if file_path:
+                # Send the file
+                with open(file_path, 'rb') as f:
+                    files = {'file': (file_path, f, 'text/csv')}
+                    response = requests.post(DISCORD_WEBHOOK, files=files)
+            elif message:
+                # Send a message if no file
+                payload = {'content': message}
+                response = requests.post(DISCORD_WEBHOOK, json=payload)
 
-            # Log the status code and response text
             logger.info(f"Discord Webhook Response: {response.status_code} - {response.text}")
-
-            # Check if the file was successfully sent (status code 204 for successful upload)
-            if response.status_code == 204:
-                return True
-            else:
-                logger.error(f"Failed to send file to Discord: {response.status_code} - {response.text}")
-                return False
+            return response.status_code == 204
         except Exception as e:
-            logger.error(f"Error while sending file to Discord: {e}")
+            logger.error(f"Error while sending to Discord: {e}")
             return False
     else:
         logger.error("Discord Webhook URL is not set!")
@@ -78,12 +79,15 @@ def urdone():
 # Route to handle the /thepurge command
 @app.route('/thepurge', methods=['POST'])
 def thepurge():
-    # Perform a shutdown action (for demonstration, you can adjust as per your server setup)
-    shutdown_message = "Shutdown sequence initiated on the Roblox server."
-    if send_to_discord(shutdown_message):
-        return jsonify({"status": "success", "message": "Shutdown sequence initiated."}), 200
-    else:
-        return jsonify({"status": "error", "message": "Failed to send shutdown message to Discord."}), 500
+    def shutdown():
+        logger.info("Server is shutting down...")
+        send_to_discord(message="Shutdown sequence initiated on the Roblox server.")
+        os.kill(os.getpid(), signal.SIGINT)  # Gracefully terminate the server
+
+    # Wait for 15 seconds before shutting down
+    threading.Timer(15, shutdown).start()
+
+    return jsonify({"status": "success", "message": "Shutdown sequence initiated."}), 200
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
