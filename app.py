@@ -27,17 +27,26 @@ if not DISCORD_WEBHOOK:
 # Send a message to Discord via webhook
 def send_to_discord(file_path):
     if DISCORD_WEBHOOK:
-        # Prepare the payload with the file attachment
-        with open(file_path, 'rb') as f:
-            files = {'file': (file_path, f, 'text/csv')}
-            response = requests.post(DISCORD_WEBHOOK, files=files)
-        
-        if response.status_code == 204:
-            return True
-        else:
-            print(f"Failed to send file to Discord: {response.status_code}")
+        try:
+            # Prepare the payload with the file attachment
+            with open(file_path, 'rb') as f:
+                files = {'file': (file_path, f, 'text/csv')}
+                response = requests.post(DISCORD_WEBHOOK, files=files)
+
+            # Log the status code and response text
+            logger.info(f"Discord Webhook Response: {response.status_code} - {response.text}")
+
+            # Check if the file was successfully sent (status code 204 for successful upload)
+            if response.status_code == 204:
+                return True
+            else:
+                logger.error(f"Failed to send file to Discord: {response.status_code} - {response.text}")
+                return False
+        except Exception as e:
+            logger.error(f"Error while sending file to Discord: {e}")
+            return False
     else:
-        print("Discord Webhook URL is not set!")
+        logger.error("Discord Webhook URL is not set!")
     return False
 
 # Route to handle the /urdone command
@@ -48,18 +57,22 @@ def urdone():
     chat_logs_csv = data.get("chat_logs_csv")
 
     if user_id and chat_logs_csv:
-        # Save the CSV data to a file
-        csv_filename = f"chat_logs_{user_id}.csv"
-        with open(csv_filename, 'w') as f:
-            f.write(chat_logs_csv)
-        
-        # Send the CSV file to Discord
-        if send_to_discord(csv_filename):
-            os.remove(csv_filename)  # Clean up the file after sending it to Discord
-            return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
-        else:
-            os.remove(csv_filename)  # Clean up even if sending fails
-            return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
+        try:
+            # Save the CSV data to a file
+            csv_filename = f"chat_logs_{user_id}.csv"
+            with open(csv_filename, 'w') as f:
+                f.write(chat_logs_csv)
+
+            # Send the CSV file to Discord
+            if send_to_discord(csv_filename):
+                os.remove(csv_filename)  # Clean up the file after sending it to Discord
+                return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
+            else:
+                os.remove(csv_filename)  # Clean up even if sending fails
+                return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
+        except Exception as e:
+            logger.error(f"Error in /urdone: {e}")
+            return jsonify({"status": "error", "message": f"Failed to process request: {e}"}), 500
     return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
 
 # Route to handle the /thepurge command
@@ -78,4 +91,7 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)  # Run on port 5000, accessible to Roblox
+    try:
+        app.run(host='0.0.0.0', port=5000)  # Run on port 5000, accessible to Roblox
+    except Exception as e:
+        logger.error(f"Error starting Flask app: {e}")
