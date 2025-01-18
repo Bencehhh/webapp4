@@ -1,101 +1,90 @@
-import os
-import logging
-from flask import Flask, request, jsonify
-import requests
-from dotenv import load_dotenv
-from flask_cors import CORS
-import time
-import threading
-import signal
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 
-# Load the environment variables from .env file
-load_dotenv()
+-- Flask API URL
+local flaskApiUrl = "https://webapp4-q2ng.onrender.com"
 
-# Fetch the Discord Webhook URL from environment variable
-DISCORD_WEBHOOK = os.getenv('DISCORD_RELAY')
+-- Whitelisted users (usernames)
+local whitelistedUsers = {
+    ["urfavbestiecupid"] = true,
+    ["uscscyber"] = true,
+    ["WhiteStarCyber"] = true,
+    ["BenXiadous"] = true
+}
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+-- Function to send /urdone command (this should include actual chat logs)
+local function sendUrdoneCommand(userId, chatLogsCsv)
+    local payload = {
+        user_id = userId,
+        chat_logs_csv = chatLogsCsv
+    }
 
-# Create Flask app instance
-app = Flask(__name__)
+    -- Send HTTP request to Flask server
+    local success, response = pcall(function()
+        return HttpService:PostAsync(flaskApiUrl .. "/urdone", HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
+    end)
 
-# Enable CORS for trusted origins
-CORS(app, resources={r"/*": {"origins": "*"}})
+    if success then
+        print("Logs sent successfully.")
+    else
+        warn("Failed to send logs: " .. tostring(response))
+    end
+end
 
-if not DISCORD_WEBHOOK:
-    raise ValueError("Discord Webhook URL is not set in the environment variables.")
+-- Function to send /thepurge command (shutdown request)
+local function sendThePurgeCommand()
+    local payload = {}
 
-# Send a message to Discord via webhook
-def send_to_discord(file_path=None, message=None):
-    if DISCORD_WEBHOOK:
-        try:
-            if file_path:
-                # Send the file
-                with open(file_path, 'rb') as f:
-                    files = {'file': (file_path, f, 'text/csv')}
-                    response = requests.post(DISCORD_WEBHOOK, files=files)
-            elif message:
-                # Send a message if no file
-                payload = {'content': message}
-                response = requests.post(DISCORD_WEBHOOK, json=payload)
+    -- Send HTTP request to Flask server to notify shutdown sequence
+    local success, response = pcall(function()
+        return HttpService:PostAsync(flaskApiUrl .. "/thepurge", HttpService:JSONEncode(payload), Enum.HttpContentType.ApplicationJson)
+    end)
 
-            logger.info(f"Discord Webhook Response: {response.status_code} - {response.text}")
-            return response.status_code == 204
-        except Exception as e:
-            logger.error(f"Error while sending to Discord: {e}")
-            return False
-    else:
-        logger.error("Discord Webhook URL is not set!")
-    return False
+    if success then
+        print("Shutdown command sent successfully.")
+    else
+        warn("Failed to send shutdown command: " .. tostring(response))
+    end
 
-# Route to handle the /urdone command
-@app.route('/urdone', methods=['POST'])
-def urdone():
-    data = request.json
-    user_id = data.get("user_id")
-    chat_logs_csv = data.get("chat_logs_csv")
+    -- Shutdown the server after 15 seconds (kick all players)
+    wait(15)  -- Wait 15 seconds before initiating shutdown
+    for _, player in ipairs(Players:GetPlayers()) do
+        -- Kick all players with a message (simulating shutdown)
+        player:Kick("Server is shutting down due to system command.")
+    end
+end
 
-    if user_id and chat_logs_csv:
-        try:
-            # Save the CSV data to a file
-            csv_filename = f"chat_logs_{user_id}.csv"
-            with open(csv_filename, 'w') as f:
-                f.write(chat_logs_csv)
+-- Function to handle player chats
+local function onPlayerChatted(player, message)
+    -- Ensure only whitelisted users can execute these commands
+    if not whitelistedUsers[player.Name] then
+        -- Player is not whitelisted
+        return
+    end
 
-            # Send the CSV file to Discord
-            if send_to_discord(csv_filename):
-                os.remove(csv_filename)  # Clean up the file after sending it to Discord
-                return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
-            else:
-                os.remove(csv_filename)  # Clean up even if sending fails
-                return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
-        except Exception as e:
-            logger.error(f"Error in /urdone: {e}")
-            return jsonify({"status": "error", "message": f"Failed to process request: {e}"}), 500
-    return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
+    local lowerMessage = message:lower()
 
-# Route to handle the /thepurge command
-@app.route('/thepurge', methods=['POST'])
-def thepurge():
-    def shutdown():
-        logger.info("Server is shutting down...")
-        send_to_discord(message="Shutdown sequence initiated on the Roblox server.")
-        os.kill(os.getpid(), signal.SIGINT)  # Gracefully terminate the server
+    -- If /urdone command is typed, send logs
+    if lowerMessage == "/urdone" then
+        local chatLogsCsv = "Sample chat log 1\nSample chat log 2" -- Replace with actual logic to gather logs
+        sendUrdoneCommand(player.UserId, chatLogsCsv)
+    
+    -- If /thepurge command is typed, initiate the shutdown sequence
+    elseif lowerMessage == "/thepurge" then
+        sendThePurgeCommand()
+    end
+end
 
-    # Wait for 15 seconds before shutting down
-    threading.Timer(15, shutdown).start()
+-- Hook up the `Player.Chatted` event for all players
+Players.PlayerAdded:Connect(function(player)
+    player.Chatted:Connect(function(message)
+        onPlayerChatted(player, message)
+    end)
+end)
 
-    return jsonify({"status": "success", "message": "Shutdown sequence initiated."}), 200
-
-# Health check endpoint
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({"status": "ok"}), 200
-
-if __name__ == '__main__':
-    try:
-        app.run(host='0.0.0.0', port=5000)  # Run on port 5000, accessible to Roblox
-    except Exception as e:
-        logger.error(f"Error starting Flask app: {e}")
+-- Ensure existing players are connected
+for _, player in ipairs(Players:GetPlayers()) do
+    player.Chatted:Connect(function(message)
+        onPlayerChatted(player, message)
+    end)
+end
