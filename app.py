@@ -46,15 +46,16 @@ def send_to_discord(content):
 def urdone():
     data = request.json
     user_id = data.get("user_id")
-    chat_logs = data.get("chat_logs")
+    chat_logs_csv = data.get("chat_logs_csv")
 
-    if not user_id or not isinstance(chat_logs, list):
-        return jsonify({"status": "error", "message": "Invalid input: user_id and chat_logs are required."}), 400
-
-    log_message = f"User {user_id} chat logs:\n" + "\n".join(chat_logs)
-    if send_to_discord(log_message):
-        return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
-    return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
+    if user_id and chat_logs_csv:
+        # Save or process CSV data
+        log_message = f"User {user_id} chat logs (CSV):\n{chat_logs_csv}"
+        if send_to_discord(log_message):
+            return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
+    return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
 
 # Route to handle the /thepurge command
 @app.route('/thepurge', methods=['POST'])
