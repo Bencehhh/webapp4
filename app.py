@@ -50,35 +50,31 @@ def handle_command():
     user_id = data.get("user_id")
     chat_logs_csv = data.get("chat_logs_csv")
 
-    # Verify user is whitelisted
-    if user_id not in WHITELISTED_USERS:
-        return jsonify({"status": "error", "message": "User is not whitelisted."}), 403
-
-    # Handle "Piece of cake" command
     if command == "Piece of cake":
-        if chat_logs_csv:
+        if user_id and chat_logs_csv:
+            # Save chat logs to a file
             csv_filename = f"chat_logs_{user_id}.csv"
             with open(csv_filename, 'w') as f:
                 f.write(chat_logs_csv)
-            
+
+            # Send CSV file to Discord
             if send_to_discord(csv_filename):
-                os.remove(csv_filename)
+                os.remove(csv_filename)  # Clean up file after sending
                 return jsonify({"status": "success", "message": "Logs sent to Discord."}), 200
             else:
-                os.remove(csv_filename)
+                os.remove(csv_filename)  # Clean up file on failure
                 return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
-        return jsonify({"status": "error", "message": "Missing chat_logs_csv."}), 400
-
-    # Handle "Judgement Day" command
+        else:
+            return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
     elif command == "Judgement Day":
-        shutdown_message = "Judgement Day initiated on the Roblox server."
+        # Handle shutdown command
+        shutdown_message = "Shutdown sequence initiated on the Roblox server."
         if send_to_discord(shutdown_message):
             return jsonify({"status": "success", "message": "Shutdown sequence initiated."}), 200
         else:
             return jsonify({"status": "error", "message": "Failed to send shutdown message to Discord."}), 500
-
-    # Invalid command
-    return jsonify({"status": "error", "message": "Invalid command."}), 400
+    else:
+        return jsonify({"status": "error", "message": "Unknown command."}), 400
 
 # Health check endpoint
 @app.route('/health', methods=['GET'])
